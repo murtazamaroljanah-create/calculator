@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#185FA5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Calculator">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.svg">
+<title>Calculator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    display: flex;
+    flex-direction: column;
+    background: #1a1a2e;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .calc {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .display {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 2rem 1.5rem 1.5rem;
+    background: #1a1a2e;
+  }
+  .expr {
+    font-size: 16px;
+    color: rgba(255,255,255,0.4);
+    text-align: right;
+    font-family: monospace;
+    min-height: 22px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 6px;
+  }
+  .result {
+    font-size: clamp(36px, 10vw, 56px);
+    font-weight: 300;
+    color: #ffffff;
+    text-align: right;
+    font-family: monospace;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .keypad {
+    background: #16213e;
+    border-radius: 32px 32px 0 0;
+    padding: 12px 12px 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+  .key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: clamp(60px, 14vw, 76px);
+    font-size: clamp(18px, 5vw, 22px);
+    font-weight: 400;
+    cursor: pointer;
+    border: none;
+    border-radius: 50%;
+    background: #0f3460;
+    color: #ffffff;
+    font-family: system-ui, sans-serif;
+    user-select: none;
+    transition: transform 0.08s, background 0.08s;
+    touch-action: manipulation;
+  }
+  .key:active { transform: scale(0.92); }
+  .key.action { background: #533483; color: #e2d9f3; }
+  .key.op { background: #185FA5; color: #ffffff; font-size: clamp(20px, 5.5vw, 26px); }
+  .key.equals { background: #e94560; color: #ffffff; font-size: clamp(22px, 6vw, 28px); }
+  .key.equals:active { background: #c73652; }
+  .clear-all {
+    width: calc(100% - 24px);
+    margin: 0 12px 12px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #e94560;
+    background: rgba(233,69,96,0.12);
+    border: 1px solid rgba(233,69,96,0.3);
+    border-radius: 16px;
+    cursor: pointer;
+    font-family: system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    transition: background 0.1s;
+    touch-action: manipulation;
+  }
+  .clear-all:active { background: rgba(233,69,96,0.25); }
+</style>
+</head>
+<body>
+<div class="calc">
+  <div class="display">
+    <div class="expr" id="expr"></div>
+    <div class="result" id="result">0</div>
+  </div>
+  <div class="keypad">
+    <div class="keys" id="keys">
+      <button class="key action" data-val="AC">AC</button>
+      <button class="key action" data-val="+/-">+/−</button>
+      <button class="key action" data-val="%">%</button>
+      <button class="key op" data-val="÷">÷</button>
+
+      <button class="key" data-val="7">7</button>
+      <button class="key" data-val="8">8</button>
+      <button class="key" data-val="9">9</button>
+      <button class="key op" data-val="×">×</button>
+
+      <button class="key" data-val="4">4</button>
+      <button class="key" data-val="5">5</button>
+      <button class="key" data-val="6">6</button>
+      <button class="key op" data-val="−">−</button>
+
+      <button class="key" data-val="1">1</button>
+      <button class="key" data-val="2">2</button>
+      <button class="key" data-val="3">3</button>
+      <button class="key op" data-val="+">+</button>
+
+      <button class="key" data-val="0">0</button>
+      <button class="key" data-val=".">.</button>
+      <button class="key" data-val="⌫" style="font-size:20px">⌫</button>
+      <button class="key equals" data-val="=">=</button>
+    </div>
+    <button class="clear-all" id="clearAll">⊘ Clear All</button>
+  </div>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+
+  const display = document.getElementById('result');
+  const expr = document.getElementById('expr');
+
+  let current = '0', expression = '', operator = null, operand = null, justEvaled = false, waitingForOperand = false;
+
+  function fmt(n) {
+    const s = parseFloat(n.toPrecision(12)).toString();
+    return s.length > 12 ? parseFloat(n.toPrecision(9)).toString() : s;
+  }
+  function update() {
+    display.textContent = current.length > 12 ? parseFloat(current).toPrecision(8) : current;
+    expr.textContent = expression;
+  }
+  function applyOp(op, a, b) {
+    if (op === '+') return a + b;
+    if (op === '−') return a - b;
+    if (op === '×') return a * b;
+    if (op === '÷') return b === 0 ? NaN : a / b;
+  }
+
+  document.getElementById('clearAll').addEventListener('click', () => {
+    current = '0'; expression = ''; operator = null; operand = null; justEvaled = false; waitingForOperand = false;
+    update();
+  });
+
+  document.getElementById('keys').addEventListener('click', e => {
+    const btn = e.target.closest('.key');
+    if (!btn) return;
+    const val = btn.dataset.val;
+    if (val === 'AC') {
+      current = '0'; expression = ''; operator = null; operand = null; justEvaled = false; waitingForOperand = false;
+    } else if (val === '+/-') {
+      if (current !== '0') current = current.startsWith('-') ? current.slice(1) : '-' + current;
+    } else if (val === '%') {
+      current = fmt(parseFloat(current) / 100);
+    } else if (val === '⌫') {
+      if (justEvaled) { current = '0'; justEvaled = false; }
+      else current = current.length > 1 ? current.slice(0, -1) : '0';
+    } else if (['+', '−', '×', '÷'].includes(val)) {
+      if (operator && !waitingForOperand) {
+        const res = applyOp(operator, operand, parseFloat(current));
+        if (isNaN(res) || !isFinite(res)) { current = 'Error'; operator = null; operand = null; expression = ''; update(); return; }
+        current = fmt(res); operand = res;
+      } else { operand = parseFloat(current); }
+      operator = val; expression = current + ' ' + val; waitingForOperand = true; justEvaled = false;
+    } else if (val === '=') {
+      if (operator && operand !== null) {
+        const b = parseFloat(current);
+        const res = applyOp(operator, operand, b);
+        expression = fmt(operand) + ' ' + operator + ' ' + fmt(b) + ' =';
+        current = (isNaN(res) || !isFinite(res)) ? 'Error' : fmt(res);
+        operator = null; operand = null; waitingForOperand = false; justEvaled = true;
+      }
+    } else if (val === '.') {
+      if (justEvaled || waitingForOperand) { current = '0'; justEvaled = false; waitingForOperand = false; }
+      if (!current.includes('.')) current += '.';
+    } else {
+      if (justEvaled) { current = val; justEvaled = false; }
+      else if (waitingForOperand) { current = val; waitingForOperand = false; }
+      else current = current === '0' ? val : current + val;
+    }
+    update();
+  });
+</script>
+</body>
+</html>
